@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chatter AI</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+      :root {
+        --bg-dark: #212121;
+        --sidebar-dark: #171717;
+        --text-main: #ececec;
+        --accent: #3d3d3d;
+        --user-msg: #2f2f2f;
+        --border: #424242;
+        --code-bg: #000;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg-dark);
+        color: var(--text-main);
+        display: flex;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      /* Sidebar */
+      #sidebar {
+        width: 260px;
+        background-color: var(--sidebar-dark);
+        display: flex;
+        flex-direction: column;
+        padding: 15px;
+        border-right: 1px solid var(--border);
+      }
+
+      .new-chat-btn {
+        border: 1px solid var(--border);
+        padding: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .new-chat-btn:hover {
+        background: var(--accent);
+      }
+
+      #history-list {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .history-item {
+        padding: 8px;
+        border-radius: 5px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+      }
+      .history-item:hover {
+        background: var(--accent);
+      }
+
+      /* Main */
+      #main-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 15px 20px;
+        font-weight: bold;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+      }
+
+      #chatter {
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 50px;
+      }
+      .msg-container {
+        width: 100%;
+        padding: 20px 0;
+        display: flex;
+        justify-content: center;
+      }
+      .msg-content {
+        width: 90%;
+        max-width: 750px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* User Bubble */
+      .user-container .msg-text {
+        background: var(--user-msg);
+        padding: 12px 18px;
+        border-radius: 20px;
+        align-self: flex-end;
+        max-width: 80%;
+      }
+
+      /* AI Markdown Styling */
+      .ai-container .msg-text {
+        align-self: flex-start;
+        width: 100%;
+      }
+      .msg-text pre {
+        background: var(--code-bg);
+        padding: 15px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .msg-text code {
+        font-family: monospace;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2px 4px;
+        border-radius: 4px;
+      }
+      .msg-text table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      .msg-text th,
+      .msg-text td {
+        border: 1px solid var(--border);
+        padding: 8px;
+      }
+
+      /* Status Indicator for Tools */
+      .status-msg {
+        font-size: 0.75rem;
+        color: #aaa;
+        margin-bottom: 5px;
+        font-style: italic;
+      }
+
+      /* Input Area */
+      .input-wrapper {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: linear-gradient(transparent, var(--bg-dark) 20%);
+      }
+      .input-box {
+        width: 100%;
+        max-width: 750px;
+        background: var(--user-msg);
+        border-radius: 15px;
+        padding: 12px;
+        border: 1px solid var(--border);
+      }
+      textarea {
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: white;
+        outline: none;
+        resize: none;
+        font-size: 1rem;
+      }
+      #drop-zone {
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 8px;
+      }
+      #drop-zone.active {
+        color: #4caf50;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sidebar">
+      <div class="new-chat-btn" onclick="location.reload()">+ New Chat</div>
+      <div id="history-list"></div>
+    </div>
+
+    <div id="main-container">
+      <header>
+        <span>Chatter</span>
+        <span style="font-size: 0.7rem; color: #4caf50"
+          >● Web Search Enabled</span
+        >
+      </header>
+      <div id="chatter"></div>
+      <div class="input-wrapper">
+        <div id="drop-zone">📎 Drop image to analyze</div>
+        <div class="input-box">
+          <textarea
+            id="user-input"
+            rows="1"
+            placeholder="Ask anything (web search enabled)..."
+          ></textarea>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentImage = null;
+      let fullResponse = "";
+
+      // Handle Image Drag/Drop
+      const dropZone = document.getElementById("drop-zone");
+      document.body.ondragover = (e) => {
+        e.preventDefault();
+        dropZone.classList.add("active");
+      };
+      document.body.ondragleave = () => dropZone.classList.remove("active");
+      document.body.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("active");
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith("image/")) {
+          currentImage = file;
+          dropZone.innerHTML = `🖼️ ${file.name} ready`;
+        }
+      };
+
+      function createMessageElement(role) {
+        const chatter = document.getElementById("chatter");
+        const container = document.createElement("div");
+        container.className = `msg-container ${role}-container`;
+
+        const content = document.createElement("div");
+        content.className = "msg-content";
+
+        const textDiv = document.createElement("div");
+        textDiv.className = "msg-text";
+
+        content.appendChild(textDiv);
+        container.appendChild(content);
+        chatter.appendChild(container);
+        return textDiv;
+      }
+
+      async function sendMessage() {
+        const input = document.getElementById("user-input");
+        const prompt = input.value.trim();
+        if (!prompt && !currentImage) return;
+
+        // Add to history sidebar
+        if (prompt) {
+          const item = document.createElement("div");
+          item.className = "history-item";
+          item.innerText = prompt;
+          document.getElementById("history-list").prepend(item);
+        }
+
+        const userText = createMessageElement("user");
+        userText.innerText = prompt || "Sent an image";
+
+        const aiText = createMessageElement("ai");
+        const status = document.createElement("div");
+        status.className = "status-msg";
+        aiText.parentNode.insertBefore(status, aiText);
+
+        input.value = "";
+        fullResponse = "";
+
+        try {
+          // Puter Tool Calling: search: true enables Google Search via Claude
+          const options = {
+            model: "claude-sonnet-4.5",
+            stream: true,
+            image: currentImage,
+            search: true,
+          };
+
+          status.innerText = "Searching web & thinking...";
+
+          const response = await puter.ai.chat(
+            prompt || "Explain this image",
+            options,
+          );
+
+          for await (const part of response) {
+            status.innerText = ""; // Clear status once response starts
+            if (part?.text) {
+              fullResponse += part.text;
+              aiText.innerHTML = marked.parse(fullResponse);
+              document.getElementById("chatter").scrollTop =
+                document.getElementById("chatter").scrollHeight;
+            }
+          }
+        } catch (err) {
+          aiText.innerText = "Error: " + err.message;
+        }
+
+        currentImage = null;
+        dropZone.innerHTML = "📎 Drop image to analyze";
+      }
+
+      document.getElementById("user-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+    </script>
+  </body>
+</html>
